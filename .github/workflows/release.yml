@@ -1,0 +1,40 @@
+name: release
+on:
+  schedule:
+    - cron: "0 23 * * *"
+
+env:
+  ACTION_FILENAME: release.yml
+  TARGET: Loyalsoldier/v2ray-rules-dat
+  USER_NAME: mzz2017
+  USER_EMAIL: mzz@tuta.io
+  REQUIRED_FILES: |
+    geoip.dat
+    geosite.dat
+
+jobs:
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    steps:
+    - name: Check and release
+      run: |
+        TARGET_TAG_URL="https://api.github.com/repos/$TARGET/releases/latest"
+        TARGET_LATEST_VER=`curl -s ${TARGET_TAG_URL} --connect-timeout 30| grep 'tag_name' | cut -d\" -f4`
+        TARGET_DIST_URLs=`curl -s ${TARGET_TAG_URL} --connect-timeout 30| grep 'browser_download_url' | cut -d\" -f4`
+        DIST_TAGS_URL="https://api.github.com/repos/${{ github.repository }}/tags"
+        DIST_TAG_FOUND=`curl -s ${DIST_TAGS_URL} --connect-timeout 30| grep "\"name\"\: \"${TARGET_LATEST_VER}\""` || true
+        if [ -z ${DIST_TAG_FOUND} ]; then
+            echo $TARGET_DIST_URLs|while read -r line;do wget $line &> /dev/null;done
+            echo $REQUIRED_FILES|while read -r line;do ls $line;done
+            mkdir -p .github/workflows
+            wget -O .github/workflows/release.yml https://github.com/${{ github.repository }}/raw/master/.github/workflows/$ACTION_FILENAME
+            git init
+            git add .
+            git config user.name $USER_NAME
+            git config user.email $USER_EMAIL
+            git commit -m "Version ${TARGET_LATEST_VER}"
+            git tag -a "${TARGET_LATEST_VER}" -m "Version ${TARGET_LATEST_VER}"
+            git remote add origin "https://${{ github.actor }}:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}"
+            git push -u --force --follow-tags origin master
+        fi
